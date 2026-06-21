@@ -1,36 +1,22 @@
-# System Architecture
-
-## High Level Flow
-
-Pipeline Failure
-        │
-        ▼
-GitLab Webhook
-        │
-        ▼
-GitLab Data Collector
-        │
-        ├── Pipeline Details
-        ├── Failed Job Logs
-        ├── Recent Commits
-        └── Related Merge Requests
-        │
-        ▼
+GitLab Pipeline Failure
+           |
+           v
+Webhook Listener
+           |
+           v
+GitLab API Collector
+           |
+           v
 Orbit Query Engine
-        │
-        ├── File Relationships
-        ├── Dependencies
-        ├── Contributors
-        └── References
-        │
-        ▼
+           |
+           v
 Root Cause Engine
-        │
-        ▼
+           |
+           v
 Impact Analyzer
-        │
-        ▼
+           |
+           v
 Report Generator
-        │
-        ▼
-GitLab Comment / Issue / MR
+           |
+           v
+GitLab Comment

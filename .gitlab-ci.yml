@@ -1,0 +1,7 @@
+﻿test:
+  image: python:3.11
+  stage: test
+  script:
+    - cd .gitlab/demo-project
+    - pip install pytest
+    - PYTHONPATH=. python -m pytest tests/ -v
