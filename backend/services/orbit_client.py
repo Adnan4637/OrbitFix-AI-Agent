@@ -1,7 +1,11 @@
+import sys
+import os
 import subprocess
 import json
-import os
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from config import GITLAB_GROUP, ORBIT_QUERY_LIMIT
+
 
 
 def run_orbit_query(query: dict) -> dict:

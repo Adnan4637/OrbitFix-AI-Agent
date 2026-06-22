@@ -1,3 +1,5 @@
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import requests
 from config import LLM_API_KEY, LLM_MODEL, LLM_API_URL
 

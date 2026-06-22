@@ -1,20 +1,19 @@
-import requests
-from config import GITLAB_TOKEN, GITLAB_URL
+import sys, os
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import requests
+
+from config import GITLAB_TOKEN, GITLAB_URL
 
 HEADERS = {
     "PRIVATE-TOKEN": GITLAB_TOKEN,
     "Content-Type": "application/json"
 }
-
-
 def _get(url: str, params: dict = None) -> dict | list:
     """Generic GET request to GitLab REST API."""
     response = requests.get(url, headers=HEADERS, params=params)
     response.raise_for_status()
     return response.json()
-
-
 def _post(url: str, data: dict) -> dict:
     """Generic POST request to GitLab REST API."""
     response = requests.post(url, headers=HEADERS, json=data)

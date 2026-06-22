@@ -1,4 +1,4 @@
-﻿class AuthManager:         
+﻿class UserService:
     def __init__(self):
         self.users = {}
 
