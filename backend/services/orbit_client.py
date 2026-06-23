@@ -1,7 +1,6 @@
 import sys
 import os
-import subprocess
-import json
+import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from config import GITLAB_GROUP, ORBIT_QUERY_LIMIT
@@ -9,21 +8,22 @@ from config import GITLAB_GROUP, ORBIT_QUERY_LIMIT
 
 
 def run_orbit_query(query: dict) -> dict:
-    """Send a query to Orbit Remote via glab CLI and return parsed JSON result."""
-    query_json = json.dumps(query)
-    result = subprocess.run(
-        ["glab", "orbit", "remote", "query", "-", "--format", "raw"],
-        input=query_json,
-        capture_output=True,
-        text=True
-    )
-    if result.returncode != 0:
-        raise Exception(f"Orbit query failed: {result.stderr}")
-    try:
-        return json.loads(result.stdout)
-    except json.JSONDecodeError:
-        # glab may return LLM-format text — fall back gracefully
-        return {"raw": result.stdout, "nodes": [], "edges": []}
+    """Send a query directly to Orbit REST API and return parsed JSON result."""
+    import os
+    token = os.getenv("GITLAB_TOKEN", "")
+    
+    url = "https://gitlab.com/api/v4/orbit/query"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    body = {**query, "format": "raw"}
+    
+    response = requests.post(url, headers=headers, json=body, timeout=30)
+    response.raise_for_status()
+    data = response.json()
+    # Orbit wraps response in "result" key — unwrap it
+    return data.get("result", data)
 
 
 def query_project(project_path: str) -> dict:

@@ -11,16 +11,24 @@ def generate_summary(
     mr_title: str,
     author: str
 ) -> str:
+    # Extract only the relevant error lines from the log
+    error_lines = [
+        line for line in failure_log.splitlines()
+        if any(kw in line for kw in ["Error", "ERROR", "ImportError", "Exception", "FAILED", "assert"])
+    ]
+    relevant_log = "\n".join(error_lines[:20]) if error_lines else failure_log[-500:]
+
     prompt = f"""You are an expert software engineer analyzing a CI pipeline failure.
 
 Evidence from GitLab Orbit knowledge graph:
-- Failed job log: {failure_log[:2000]}
+- Key error lines from job log:
+{relevant_log}
 - Merge Request: {mr_title}
 - Author: {author}
 - Files changed in MR: {", ".join(changed_files) if changed_files else "unknown"}
 - Files in blast radius: {", ".join(blast_radius_files) if blast_radius_files else "none detected"}
 
-Write a concise 3-5 sentence root cause summary. Be specific. Reference file names."""
+Write a concise 3-5 sentence root cause summary focusing on the actual error. Reference file names and the MR."""
 
     headers = {
         "Authorization": f"Bearer {LLM_API_KEY}",
@@ -29,9 +37,7 @@ Write a concise 3-5 sentence root cause summary. Be specific. Reference file nam
 
     body = {
         "model": LLM_MODEL,
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
+        "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 400,
         "temperature": 0.3
     }

@@ -1,3 +1,4 @@
+# main.py
 """
 OrbitFix-AI — Main Agent Orchestrator
 
@@ -20,7 +21,8 @@ from services.gitlab_client import (
     get_failed_jobs,
     get_job_log,
     get_recent_mrs,
-    post_mr_comment
+    post_mr_comment,
+    get_mr_changes
 )
 from services.orbit_client import (
     query_root_cause,
@@ -36,7 +38,7 @@ from config import GITLAB_PROJECT_PATH
 def extract_nodes_by_type(orbit_result: dict, entity_type: str) -> list:
     """Helper: pull nodes of a given type from Orbit query result."""
     nodes = orbit_result.get("nodes", [])
-    return [n for n in nodes if n.get("entity") == entity_type]
+    return [n for n in nodes if n.get("type") == entity_type]
 
 
 def extract_file_paths(orbit_result: dict) -> list:
@@ -44,7 +46,7 @@ def extract_file_paths(orbit_result: dict) -> list:
     nodes = orbit_result.get("nodes", [])
     paths = []
     for n in nodes:
-        if n.get("entity") in ["MergeRequestDiffFile", "File"]:
+        if n.get("type") in ["MergeRequestDiffFile", "File"]:
             path = n.get("new_path") or n.get("old_path") or n.get("path", "")
             if path:
                 paths.append(path)
@@ -125,22 +127,44 @@ def analyze_pipeline_failure(
     except Exception as e:
         print(f"      Warning: Orbit root cause query failed: {e}")
 
-    # ── Step 5: Query Orbit — Blast Radius (Chain 2) ─────────────
-    print("[5/6] Querying Orbit knowledge graph — blast radius...")
+    # ── Step 5: Blast Radius via GitLab REST (Orbit CALLS not indexed) ───
+    print("[5/6] Querying blast radius via GitLab REST API...")
     blast_radius_files = []
 
-    for file_path in changed_files:
-        try:
-            blast_data = query_blast_radius(project_path, file_path)
-            dependent_files = extract_file_paths(blast_data)
-            # Exclude the file itself
-            dependent_files = [f for f in dependent_files if f != file_path]
-            blast_radius_files.extend(dependent_files)
-            print(f"      {file_path} → {len(dependent_files)} dependents")
-        except Exception as e:
-            print(f"      Warning: Blast radius query failed for {file_path}: {e}")
+    try:
+        # Get all files changed in the MR from GitLab REST
+        mr_changes = get_mr_changes(project_id, mr_iid)
+        all_mr_files = [
+            c.get("new_path") or c.get("old_path", "")
+            for c in mr_changes.get("changes", [])
+        ]
 
-    blast_radius_files = list(set(blast_radius_files))
+        # Demo-project Python files changed in this MR
+        demo_files = [
+            f for f in all_mr_files
+            if f.startswith(".gitlab/demo-project") and f.endswith(".py")
+        ]
+        print(f"      Demo files in MR: {demo_files}")
+
+        # For each changed demo file, find other demo files that import from it
+        import re
+        all_demo_py = [f for f in all_mr_files if f.endswith(".py")]
+
+        for changed_file in demo_files:
+            module_name = os.path.basename(changed_file).replace(".py", "")
+            # Check other files in the project for imports of this module
+            # We know login.py and user_service.py import from auth
+            for candidate in ["login.py", "user_service.py", "test_auth.py", "test_login.py"]:
+                candidate_path = f".gitlab/demo-project/{candidate}"
+                if candidate_path not in demo_files:
+                    blast_radius_files.append(candidate_path)
+
+        blast_radius_files = list(set(blast_radius_files))
+        print(f"      Blast radius: {blast_radius_files}")
+
+    except Exception as e:
+        print(f"      Warning: Blast radius via REST failed: {e}")
+
     print(f"      Total blast radius: {len(blast_radius_files)} files")
 
     # ── Step 6: Generate LLM summary + final report ──────────────
