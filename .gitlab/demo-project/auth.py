@@ -1,4 +1,5 @@
-﻿class UserService:
+﻿# OrbitFix-AI demo — AuthManager service
+class AuthManager:
     def __init__(self):
         self.users = {}
 
