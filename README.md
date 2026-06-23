@@ -1,206 +1,254 @@
 # OrbitFix-AI
-## Overview
 
-Orbit Root Cause & Impact Analysis Agent is an AI-powered developer assistant built on top of GitLab Orbit.
+**AI-powered CI pipeline failure investigation agent built on GitLab Orbit.**
 
-When a CI pipeline fails, developers often spend significant time investigating:
-
-- Which commit introduced the failure
-- Which merge request caused it
-- Which files are impacted
-- Which services are affected
-- Whether a rollback is required
-
-Our agent automatically traces a failure through GitLab Orbit's knowledge graph and generates a structured root-cause and impact report.
+When a CI pipeline fails, OrbitFix-AI automatically traces the failure through GitLab Orbit's knowledge graph and generates a structured Root Cause and Impact Analysis Report — posted directly as a comment on the responsible merge request.
 
 ---
 
-## Problem Statement
+## The Problem
 
-Most CI/CD tools and AI assistants can explain **what failed**.
+Most CI/CD tools tell you *what* failed. Developers still have to manually investigate:
 
-However, developers still need to manually investigate:
+- Which merge request introduced the regression
+- Who authored that change
+- Which files are directly affected
+- Which other files depend on the changed code
+- Whether to rollback or fix forward
 
-- Where the failure originated
-- Who introduced the change
-- What else may break because of it
-- Which teams or services are impacted
-
-This investigation can take significantly longer than fixing the actual issue.
+This investigation can take longer than fixing the issue itself.
 
 ---
 
-## Solution
+## The Solution
 
-Orbit Root Cause & Impact Analysis Agent combines:
+OrbitFix-AI combines GitLab REST API data, GitLab Orbit's relationship graph, and an LLM narrative layer to answer all of those questions automatically in seconds.
 
-- GitLab Pipeline Data
-- Job Logs
-- Commits
-- Merge Requests
-- GitLab Orbit Knowledge Graph
-- AI Reasoning
+**What the agent determines:**
 
-to automatically determine:
-
-- Probable root cause
-- Related commit
-- Related merge request
-- Affected files
-- Affected components
-- Blast radius / impact
+- The merge request that triggered the failing pipeline
+- The author of that merge request
+- The exact files changed in the MR
+- The blast radius — all files that depend on the changed code
+- A recommended action (rollback or fix)
 
 ---
 
 ## Why GitLab Orbit?
 
-Traditional AI log analyzers only read text logs.
+Traditional AI log analyzers only read text. GitLab Orbit provides a structured knowledge graph of relationships between source code, files, functions, classes, merge requests, pipelines, and developers.
 
-GitLab Orbit provides a structured graph of relationships between:
-
-- Source Code
-- Files
-- Functions
-- Classes
-- Merge Requests
-- Pipelines
-- Developers
-- Dependencies
-
-Using Orbit allows the agent to move beyond log analysis and understand how code changes relate to failures across the software delivery lifecycle.
+OrbitFix-AI queries Orbit directly to traverse these relationships — replacing what would otherwise be dozens of manual API calls and hours of investigation.
 
 ---
 
-## Example Output
+## Demo
 
-```text
-Root Cause Analysis Report
+Pipeline `#2620919604` fails with:
 
-Failure Source:
-MR !42
-
-Commit:
-abc123
-
-Author:
-Ahmed Ali Khan
-
-Affected Files:
-- auth.py
-- login.py
-
-Affected Components:
-- Authentication Service
-- User API
-
-Impacted Tests:
-- test_auth.py
-- test_login.py
-
-Confidence:
-89%
-
-Recommendation:
-Rollback commit abc123 or update dependent imports.
+```
+ImportError: cannot import name 'UserService' from 'auth'
 ```
 
+OrbitFix-AI produces:
+
+```
+Merge Request:  !1 — Rename UserService to AuthManager
+Author:         m.adnan4637
+Changed Files:  .gitlab/demo-project/auth.py
+Blast Radius:   login.py, user_service.py, test_auth.py, test_login.py
+Confidence:     100%
+Action:         Rollback MR !1 or update all dependent imports
+```
+
+The full report is automatically posted as a comment on MR !1.
+
 ---
 
-## Workflow
+## How It Works
 
-```text
-Pipeline Failure
-        │
-        ▼
-Collect Logs
-        │
-        ▼
-Collect GitLab Metadata
-        │
-        ▼
-Query Orbit Knowledge Graph
-        │
-        ▼
-Identify Root Cause
-        │
-        ▼
-Analyze Impact Radius
-        │
-        ▼
-Generate Investigation Report
-        │
-        ▼
-Publish Results to GitLab
+```
+CI Pipeline Fails
+        |
+        v
+Collect Pipeline Metadata       (GitLab REST API)
+        |
+        v
+Collect Failed Job Log          (GitLab REST API)
+        |
+        v
+Query Orbit — Root Cause        (Project → MR → Diff → Changed Files → Author)
+        |
+        v
+Query Orbit — Blast Radius      (Changed File → Dependents)
+        |
+        v
+Generate LLM Narrative          (Groq — Llama 3.1)
+        |
+        v
+Build Structured Report
+        |
+        v
+Post Report to MR               (GitLab REST API)
 ```
 
 ---
 
 ## Features
 
-### Root Cause Detection
+**Root Cause Detection** — Identifies the MR and commit that introduced the regression.
 
-Identify the most likely source of a regression.
+**Author Attribution** — Determines who made the change via Orbit's relationship graph.
 
-### Commit Attribution
+**Changed File Analysis** — Lists every file modified in the responsible MR.
 
-Determine which commit introduced the issue.
+**Blast Radius Detection** — Finds all files that depend on the changed code.
 
-### Merge Request Attribution
+**LLM Narrative** — Generates a concise human-readable summary of the failure.
 
-Trace failures back to merge requests.
-
-### Impact Analysis
-
-Estimate affected files, services and tests.
-
-### Blast Radius Detection
-
-Understand the broader consequences of a failure.
-
-### GitLab Integration
-
-Post findings directly back into GitLab workflows.
+**GitLab Integration** — Posts the complete report as a comment on the responsible MR.
 
 ---
 
 ## Technology Stack
 
-- Python 3.11+
-- FastAPI
+- Python 3.11
 - GitLab REST API
-- GitLab Orbit
-- Ollama
-- Llama 3.1
-- GitLab Duo Agent Platform
+- GitLab Orbit Knowledge Graph
+- Groq API (Llama 3.1 8B)
+- `requests`, `python-dotenv`
 
 ---
 
 ## Project Structure
 
-```text
-orbit-root-cause-agent/
-
-backend/
-docs/
-sample-data/
-tests/
-
-README.md
-requirements.txt
-.env.example
+```
+orbitfix-ai/
+├── backend/
+│   ├── config.py                   # Environment variables
+│   ├── main.py                     # Main orchestrator
+│   └── services/
+│       ├── orbit_client.py         # GitLab Orbit REST queries
+│       ├── gitlab_client.py        # GitLab REST API calls
+│       ├── llm_service.py          # Groq LLM narrative generation
+│       └── report_generator.py     # Markdown report builder
+├── .gitlab/
+│   └── demo-project/               # Demo regression codebase
+│       ├── auth.py                 # AuthManager (renamed from UserService)
+│       ├── login.py                # Still imports UserService — broken
+│       ├── user_service.py         # Still imports UserService — broken
+│       └── tests/
+├── .gitlab-ci.yml                  # CI pipeline running pytest
+├── .env.example                    # Environment variable template
+├── requirements.txt
+└── README.md
 ```
 
 ---
 
-## Current Status
+## Setup
 
-🚧 Hackathon MVP in development
+**1. Clone the repository**
 
-Planned MVP capabilities:
+```bash
+git clone https://gitlab.com/m.adnan4637-group/orbitfix-ai-dev.git
+cd orbitfix-ai-dev
+```
 
-- Pipeline failure ingestion
-- GitLab metadata collection
-- Orbit relationship queries
-- Root cause analysis
-- Impact analysis report generation
+**2. Create a virtual environment**
 
+```bash
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+**3. Configure environment variables**
+
+Copy `.env.example` to `.env` and fill in your values:
+
+```env
+GITLAB_TOKEN=glpat-...
+GITLAB_URL=https://gitlab.com
+GITLAB_GROUP=your-group
+GITLAB_PROJECT_PATH=your-group/your-project
+
+LLM_API_KEY=gsk_...
+LLM_MODEL=llama-3.1-8b-instant
+LLM_API_URL=https://api.groq.com/openai/v1/chat/completions
+
+ORBIT_QUERY_LIMIT=20
+```
+
+**4. Run the agent**
+
+```bash
+python backend/main.py <project_path> <pipeline_id>
+```
+
+Example:
+
+```bash
+python backend/main.py m.adnan4637-group/orbitfix-ai-dev 2620919604
+```
+
+---
+
+## Sample Report Output
+
+```markdown
+# Orbit Root Cause & Impact Analysis Report
+
+Project:    m.adnan4637-group/orbitfix-ai-dev
+Pipeline:   #2620919604
+Generated:  2026-06-23 02:31 UTC
+
+## Failure Source
+
+| Field          | Value                                  |
+|----------------|----------------------------------------|
+| Merge Request  | !1 — Rename UserService to AuthManager |
+| Author         | m.adnan4637                            |
+| Commit         | e2242de9                               |
+| Failed Job     | test                                   |
+
+## AI Summary
+
+The root cause is an ImportError caused by MR !1, which renamed
+UserService to AuthManager in auth.py without updating the dependent
+files login.py and user_service.py, which still import the old class name.
+
+## Changed Files
+- .gitlab/demo-project/auth.py
+
+## Blast Radius (At Risk)
+- .gitlab/demo-project/login.py
+- .gitlab/demo-project/user_service.py
+- .gitlab/demo-project/test_auth.py
+- .gitlab/demo-project/test_login.py
+
+## Confidence: 100%
+
+## Recommended Action
+Rollback MR !1 or update all dependent imports listed above.
+```
+
+---
+
+## GitLab Orbit Queries Used
+
+**Chain 1 — Root Cause:**
+`Project → MergeRequest → MergeRequestDiff → MergeRequestDiffFile`
+Finds which MR triggered the pipeline, who authored it, and which files it changed.
+
+**Chain 2 — Blast Radius:**
+`File → Definition → (reverse CALLS) → Definition → File`
+Finds every file in the codebase that calls or imports anything from the changed file.
+
+---
+
+## GitLab Hackathon — Transcend 2026
+
+Built for the GitLab Transcend Hackathon, Showcase Track.
+
+This project demonstrates how GitLab Orbit's knowledge graph can power intelligent developer tooling that goes beyond log analysis to provide full causal understanding of CI failures.
